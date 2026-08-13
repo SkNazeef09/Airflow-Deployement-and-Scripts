@@ -1,0 +1,106 @@
+
+Airflow Deployment
+
+
+----*** Update and install packages ***----
+$ sudo apt update && sudo apt -y upgrade
+$ sudo apt install -y python3 python3-venv python3-pip build-essential \
+libpq-dev postgresql postgresql-contrib wget curl unzip
+$ export AIRFLOW_HOME="$HOME/airflow3"
+$ mkdir -p "$AIRFLOW_HOME"
+$ cd "$AIRFLOW_HOME"
+
+
+----*** Configure Postgresql service ***----
+$ sudo systemctl enable --now postgresql
+$ export AF_DB=airflow_db
+$ export AF_DB_USER=airflow_user
+$ export AF_DB_PASS="password"
+$ sudo -u postgres psql -c "CREATE ROLE ${AF_DB_USER} LOGIN PASSWORD '${AF_DB_PASS}';"
+$ sudo -u postgres psql -c "CREATE DATABASE ${AF_DB} OWNER ${AF_DB_USER};"
+$ sudo -u postgres psql -d ${AF_DB} -c "GRANT ALL ON SCHEMA public TO ${AF_DB_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${AF_DB_USER};
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${AF_DB_USER};"
+$ echo "postgresql+psycopg2://${AF_DB_USER}:${AF_DB_PASS}@localhost:5432/${AF_DB}"
+
+
+----*** Create python virtual environment ***----
+$ python3 -m venv .venv
+$ source .venv/bin/activate
+$ pip install --upgrade pip setuptools wheel
+
+
+----*** Install Airflow 3 ***----
+$ export AIRFLOW_VERSION="3.0.6"
+$ export PYTHON_VERSION=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+$ export CONSTRAINT_URL="https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYTHON_VERSION}.txt"
+$ pip install "apache-airflow[postgres]==${AIRFLOW_VERSION}" --constraint "${CONSTRAINT_URL}"
+
+
+----*** Initialize Airflow metadata DB & config ***----
+$ export FERNET_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+$ export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${AF_DB_USER}:${AF_DB_PASS}@localhost:5432/${AF_DB}"
+$ export AIRFLOW__CORE__EXECUTOR="LocalExecutor"
+$ export AIRFLOW_HOME
+$ airflow db migrate
+
+
+----*** Start Airflow ***----
+$ mkdir -p $AIRFLOW_HOME/logs
+$ export AIRFLOW__API__HOST=0.0.0.0
+$ export AIRFLOW__API__PORT=8080
+$ airflow scheduler > "$AIRFLOW_HOME/logs/scheduler.log" 2>&1 &
+$ airflow dag-processor > "$AIRFLOW_HOME/logs/dag-processor.log" 2>&1 &
+$ airflow triggerer > "$AIRFLOW_HOME/logs/triggerer.log" 2>&1 &
+$ airflow api-server > "$AIRFLOW_HOME/logs/api-server.log" 2>&1 &
+
+
+----*** Health check ***----
+$ airflow version && airflow info | head -n 20
+$ curl -s http://localhost:8080/api/v2/monitor/health | jq .
+
+
+----*** Check and set admin password ***----
+$ ls -l $AIRFLOW_HOME/*auth*.json*
+$ cat $AIRFLOW_HOME/simple_auth_manager_passwords.json.generated
+$ nano $AIRFLOW_HOME/simple_auth_manager_passwords.json.generated
+(Change password)
+>> Access web ui - http://<EC2-PUBLIC-IP>:8080
+
+
+----*** Update bashrc with necessary variables ***----
+>> Exit from venv
+$ deactivate
+$ nano .bashrc
+
+# Airflow persistent environment variables
+export AIRFLOW_HOME="$HOME/airflow3"
+
+# Database credentials
+export AF_DB=airflow_db
+export AF_DB_USER=airflow_user
+export AF_DB_PASS="password"
+
+# Airflow database connection string
+export AIRFLOW__DATABASE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${AF_DB_USER}:${AF_DB_PASS}@localhost:5432/${AF_DB}"
+
+# LocalExecutor
+export AIRFLOW__CORE__EXECUTOR="LocalExecutor"
+
+# Airflow API / Webserver configs
+export AIRFLOW__API__HOST=0.0.0.0
+export AIRFLOW__API__PORT=8080
+$ source .bashrc
+
+
+----*** Start/Stop Airflow ***----
+>> After starting ec2 from aws console
+$ cd ~/airflow3
+$ source .venv/bin/activate
+$ sudo systemctl start postgresql
+$ sudo systemctl status postgresql
+$ airflow scheduler > "$AIRFLOW_HOME/logs/scheduler.log" 2>&1 &
+$ airflow dag-processor > "$AIRFLOW_HOME/logs/dag-processor.log" 2>&1 &
+$ airflow triggerer > "$AIRFLOW_HOME/logs/triggerer.log" 2>&1 &
+$ airflow api-server > "$AIRFLOW_HOME/logs/api-server.log" 2>&1 &
+>> Access from browser

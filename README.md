@@ -287,6 +287,4 @@ pkill -f "airflow api-server"
 
 ---
 
-## License
 
-Add your project's license here (e.g., MIT, Apache 2.0).

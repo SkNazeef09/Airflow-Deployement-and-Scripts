@@ -1,0 +1,65 @@
+{
+  "id": "1293234",
+  "personalInfo": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "email": "johndoe@example.com",
+    "phone": "+1-555-293-4781",
+    "birthDate": "1984-03-17",
+    "gender": "male",
+    "address": {
+      "street": "428 Maple Avenue",
+      "city": "Riverdale",
+      "state": "OR",
+      "zipCode": "97403",
+      "country": "United States"
+    }
+  },
+  "accountDetails": {
+    "username": "johndoe",
+    "createdAt": "2022-09-12T14:38:21Z",
+    "lastLogin": "2025-04-27T09:15:43Z",
+    "accountStatus": "active",
+    "verificationStatus": "verified",
+    "subscriptionTier": "premium",
+    "subscriptionRenewalDate": "2025-07-12T00:00:00Z"
+  },
+  "preferences": {
+    "language": "en-US",
+    "theme": "dark",
+    "notifications": {
+      "email": true,
+      "push": true,
+      "sms": false
+    },
+    "privacySettings": {
+      "profileVisibility": "friends",
+      "dataSharing": "minimal",
+      "activityTracking": "enabled"
+    }
+  },
+  "statistics": {
+    "totalLogins": 347,
+    "averageSessionDuration": 28.4,
+    "purchaseHistory": {
+      "totalSpent": 523.87,
+      "numberOfTransactions": 14,
+      "lastPurchaseDate": "2025-04-12T16:22:05Z"
+    },
+    "contentInteractions": {
+      "postsCreated": 57,
+      "commentsWritten": 213,
+      "likesGiven": 846
+    }
+  },
+  "metadata": {
+    "deviceInfo": {
+      "lastDevice": "iPhone 16 Pro",
+      "operatingSystem": "iOS 18.3",
+      "browserAgent": "Safari Mobile 18.4"
+    },
+    "ipAddress": "198.51.100.234",
+    "referralSource": "organic_search",
+    "tags": ["early_adopter", "frequent_commenter", "active_user"]
+  }
+}

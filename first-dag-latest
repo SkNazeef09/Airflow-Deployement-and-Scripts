@@ -1,0 +1,309 @@
+# create the dags folder
+
+# inside dags folder
+
+$ nano first-dag.py
+
+>> Dag Creation
+
+#########################################################################################
+
+from datetime import datetime
+from airflow.sdk import dag
+
+@dag(
+start_date=datetime(2025, 1, 1),
+    schedule=None,
+    catchup=False
+)
+
+def pipeline1():
+    pass
+
+my_pipeline1 = pipeline1()
+
+
+>> Check on dags view
+
+(Troubleshoot
+$ airflow dags reserialize)
+
+
+###########################################################################################
+
+>> Create the first task - create table in postgres
+
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from datetime import datetime
+from airflow.sdk import dag
+
+@dag(
+start_date=datetime(2025, 1, 1),
+    schedule=None,
+    catchup=False
+)
+
+def pipeline1():
+    create_table = SQLExecuteQueryOperator(
+        task_id="create_table",
+        conn_id="postgres",
+        sql="""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT PRIMARY KEY,
+            firstname VARCHAR(255),
+            lastname VARCHAR(255),
+            email VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+my_pipeline1 = pipeline1()
+
+
+>> Create conection in airflow UI
+
+Coonection ID - postgres
+Connection type - Postgres
+Host - 0.0.0.0
+login - airflow_user
+password - 
+port - 5432
+schema - airflow_db
+
+
+>> Test the task
+
+airflow tasks test pipeline1 create_table
+
+
+###########################################################################################
+
+>> Check if the api is available
+
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from datetime import datetime
+from airflow.sdk import dag, task
+from airflow.sdk.bases.sensor import PokeReturnValue
+
+@dag(
+start_date=datetime(2025, 1, 1),
+    schedule=None,
+    catchup=False
+)
+
+def pipeline1():
+    create_table = SQLExecuteQueryOperator(
+        task_id="create_table",
+        conn_id="postgres",
+        sql="""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT PRIMARY KEY,
+            firstname VARCHAR(255),
+            lastname VARCHAR(255),
+            email VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    @task.sensor(poke_interval=30, timeout=600)
+    def is_api_available() -> PokeReturnValue:
+        import requests
+        response = requests.get("https://databinaries-test-api.s3.us-east-1.amazonaws.com/users.json")
+        print(response.status_code)
+        if response.status_code == 200:
+            user = response.json()
+            return PokeReturnValue(True, xcom_value=user)
+        else:
+            user = None
+            return PokeReturnValue(False, xcom_value=user)
+
+    user = is_api_available()
+
+my_pipeline1 = pipeline1()
+
+
+>> Load API on S3
+
+>> Test the task
+
+$ airflow tasks test pipeline1 is_api_available
+
+
+###########################################################################################
+
+
+>>> Create remaining tasks
+
+
+from datetime import datetime
+from airflow.sdk import dag , task
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.sdk.bases.sensor import PokeReturnValue
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+
+
+@dag(
+    start_date=datetime(2025, 1, 1),
+    schedule=None,
+    catchup=False
+)
+
+def pipeline1():
+
+    create_table = SQLExecuteQueryOperator(
+        task_id="create_table",
+        conn_id="postgres",
+        sql="""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT PRIMARY KEY,
+            firstname VARCHAR(255),
+            lastname VARCHAR(255),
+            email VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    @task.sensor(poke_interval=30, timeout=600)
+    def is_api_available() -> PokeReturnValue:
+        import requests
+        response = requests.get("https://databinaries-test-api.s3.us-east-1.amazonaws.com/users.json")
+        print(response.status_code)
+        if response.status_code == 200:
+            user = response.json()
+            return PokeReturnValue(True, xcom_value=user)
+        else:
+            user = None
+            return PokeReturnValue(False, xcom_value=user)
+
+    @task
+    def extract_user(user):
+        return{
+            "id": user["id"],
+            "firstname": user["personalInfo"]["firstName"],
+            "lastname": user["personalInfo"]["lastName"],
+            "email": user["personalInfo"]["email"],
+        }        
+    
+
+    @task
+    def process_users(user_info):
+        import csv
+        user_info["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open('/tmp/user_info.csv', 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=user_info.keys())
+            writer.writeheader()
+            writer.writerow(user_info)
+
+
+    @task
+    def store_user():
+        hook = PostgresHook(postgres_conn_id="postgres")
+        hook.copy_expert(
+            sql="COPY users FROM STDIN WITH CSV HEADER",
+            filename="/tmp/user_info.csv",
+                    )
+
+
+    process_users(extract_user(create_table >> is_api_available())) >> store_user()                    
+
+
+
+my_pipeline1 = pipeline1()
+
+
+###########################################################################################
+
+
+>> Check pipeline from airflow UI and trigger the pipeline
+
+>> Check output in postgres
+
+$  sudo -u postgres psql
+
+  \c airflow_db
+  SELECT * FROM users;
+  \q
+
+
+###########################################################################################
+
+
+from datetime import datetime
+from airflow.sdk import dag , task
+from airflow.providers.common.sql.operators.sql import SQLExecuteQueryOperator
+from airflow.sdk.bases.sensor import PokeReturnValue
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+
+
+@dag(
+    start_date=datetime(2025, 1, 1),
+    schedule=None,
+    catchup=False
+)
+
+def pipeline1():
+
+    create_table = SQLExecuteQueryOperator(
+        task_id="create_table",
+        conn_id="postgres",
+        sql="""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT PRIMARY KEY,
+            firstname VARCHAR(255),
+            lastname VARCHAR(255),
+            email VARCHAR(255),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+
+    @task.sensor(poke_interval=30, timeout=600)
+    def is_api_available() -> PokeReturnValue:
+        import requests
+        response = requests.get("https://databinaries-test-api.s3.us-east-1.amazonaws.com/users.json")
+        print(response.status_code)
+        if response.status_code == 200:
+            user = response.json()
+            return PokeReturnValue(True, xcom_value=user)
+        else:
+            user = None
+            return PokeReturnValue(False, xcom_value=user)
+
+    @task
+    def extract_user(user):
+        import random 
+        return {
+            "id": int(user["id"]) + random.randint(1, 10000), 
+            "firstname": user["personalInfo"]["firstName"],
+            "lastname": user["personalInfo"]["lastName"],
+            "email": user["personalInfo"]["email"],
+        }       
+    
+
+    @task
+    def process_users(user_info):
+        import csv
+        user_info["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open('/tmp/user_info.csv', 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=user_info.keys())
+            writer.writeheader()
+            writer.writerow(user_info)
+
+
+    @task
+    def store_user():
+        hook = PostgresHook(postgres_conn_id="postgres")
+        hook.copy_expert(
+            sql="COPY users FROM STDIN WITH CSV HEADER",
+            filename="/tmp/user_info.csv",
+                    )
+
+
+    process_users(extract_user(create_table >> is_api_available())) >> store_user()                    
+
+
+
+my_pipeline1 = pipeline1()
